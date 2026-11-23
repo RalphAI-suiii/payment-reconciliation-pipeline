@@ -58,7 +58,7 @@ Each run writes under `data/output/<batch-date>/`:
 - `matched.csv` — payments that passed every matching rule.
 - `exceptions.csv` — payments with one or more reconciliation reasons.
 - `quarantine.csv` — invalid source rows and their validation reasons.
-- `report.json` — source counts, duplicates removed, quarantine count, match and exception counts, and matched or unmatched totals by currency.
+- `report.json` — source counts, duplicates removed, match and exception counts, exception and quarantine counts by reason, and matched or unmatched totals by currency.
 
 Generated inputs are kept under `data/raw/<batch-date>/`. Both data directories are ignored by Git. Running the same batch date regenerates the same synthetic rows and replaces that date's local files; it does not append duplicate output.
 
