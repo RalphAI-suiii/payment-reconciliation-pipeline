@@ -1,0 +1,32 @@
+name: Nightly synthetic reconciliation
+
+on:
+  schedule:
+    - cron: "0 16 * * *" # 00:00 Asia/Manila (GitHub schedules use UTC)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Generate and reconcile the nightly batch
+        run: |
+          batch_date="$(TZ=Asia/Manila date +'%F')"
+          python -m payment_reconciliation --batch-date "$batch_date"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: reconciliation-output-${{ github.run_id }}
+          path: data/output/
+          if-no-files-found: error
+          retention-days: 7
+
