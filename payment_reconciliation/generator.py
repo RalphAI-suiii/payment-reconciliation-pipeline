@@ -86,6 +86,27 @@ def generate_inputs(raw_dir: Path, batch_date: date) -> None:
         }
     )
 
+    ledger.append(
+        {
+            "ledger_entry_id": "LED-ORPHAN-0001",
+            "payment_id": f"PAY-{batch_date:%Y%m%d}-ORPHAN-LEDGER",
+            "posting_date": batch_date.isoformat(),
+            "amount_minor": "2450",
+            "currency": "USD",
+        }
+    )
+    settlements.append(
+        {
+            "settlement_id": "SET-ORPHAN-0001",
+            "payment_id": f"PAY-{batch_date:%Y%m%d}-ORPHAN-SETTLEMENT",
+            "settlement_date": batch_date.isoformat(),
+            "gross_minor": "3100",
+            "fee_minor": "85",
+            "net_minor": "3015",
+            "currency": "EUR",
+        }
+    )
+
     _write_csv(raw_dir / "payments.csv", payment_columns, payments)
     _write_csv(raw_dir / "ledger.csv", ledger_columns, ledger)
     _write_csv(raw_dir / "settlements.csv", settlement_columns, settlements)
