@@ -20,10 +20,13 @@ flowchart TD
     F --> G{"Headers and row values valid?"}
     G -- "Invalid row" --> Q["Quarantine row with reason"]
     G -- "Valid" --> H["Normalize fields and remove duplicate rows"]
-    H --> I["Match deterministically by payment_id"]
-    I --> J{"Amounts, currencies, dates, and fee math agree?"}
+    H --> I{"Accepted processor payment for this payment_id?"}
+    I -- "Yes" --> J{"Amounts, currencies, dates, and fee math agree?"}
+    I -- "No" --> O["Flag each orphan source record"]
     J -- "Yes" --> K["Write matched.csv"]
-    J -- "No" --> X["Write exceptions.csv"]
+    J -- "No" --> P["Flag one exception per payment ID"]
+    O --> X["Write exceptions.csv"]
+    P --> X
 
     K --> R["Write daily report.json"]
     X --> R
@@ -37,7 +40,10 @@ flowchart TD
 2. Checks required headers and validates required values, dates, currencies, and integer amounts. A missing required header fails the batch; invalid individual rows are written to quarantine.
 3. Trims whitespace, uppercases currency codes, and removes identical normalized rows within each source.
 4. Matches records by `payment_id` and checks payment and ledger amounts, currency agreement, settlement date, and `gross_minor - fee_minor = net_minor`.
-5. Writes matched records, exceptions, quarantined rows, and a JSON quality report.
+5. Flags each accepted ledger or settlement record whose `payment_id` has no accepted processor payment in the batch.
+6. Writes matched records, exceptions, quarantined rows, and a JSON quality report.
+
+The synthetic inputs include clean matches, a missing ledger entry, a missing settlement, settlement gross and currency mismatches, inconsistent fee arithmetic, a late settlement, an exact redelivery, a malformed payment row, and one orphan record from each of the ledger and settlement sources.
 
 Matching is deterministic. Missing, ambiguous, late-dated, and mismatched records receive named exception reasons for review. The pipeline does not guess a match.
 
@@ -51,14 +57,16 @@ Matching is deterministic. Missing, ambiguous, late-dated, and mismatched record
 
 `payment_id` is the shared matching key. Amounts are integer minor units; the generator uses USD and EUR, which both have two decimal places. Dates use ISO `YYYY-MM-DD` format. Extra named columns are ignored; missing required columns stop the batch.
 
+An orphan is a validated, deduplicated ledger or settlement row whose `payment_id` is absent from the validated payments for that batch. Its source record ID comes from `ledger_entry_id` or `settlement_id`. The CSV row number identifies the input location retained after deduplication.
+
 ## Outputs
 
 Each run writes under `data/output/<batch-date>/`:
 
 - `matched.csv` — payments that passed every matching rule.
-- `exceptions.csv` — payments with one or more reconciliation reasons.
+- `exceptions.csv` — `exception_grain=payment` gives one row per payment ID with reconciliation reasons and its payment amount and currency. `exception_grain=source_record` gives one row per orphan with reason `orphan_source_record`, `source`, `source_record_id`, `source_row`, and `source_currency`. Ledger orphans fill `source_amount_minor`. Settlement orphans fill `source_gross_minor`, `source_fee_minor`, and `source_net_minor`. Fields that do not apply are blank.
 - `quarantine.csv` — invalid source rows and their validation reasons.
-- `report.json` — source counts, duplicates removed, match and exception counts, exception and quarantine counts by reason, and matched or unmatched totals by currency.
+- `report.json` — source counts, duplicates removed, match counts, exception and quarantine counts by reason, and matched and unmatched payment totals by currency. `exception_count` includes both `payment_exception_count` and `orphan_source_exception_count`. `orphan_source_totals_by_source_and_currency` groups ledger `amount_minor` and settlement `gross_minor`, `fee_minor`, and `net_minor` by source and currency. Unmatched payment totals use only payment-grain exceptions.
 
 Generated inputs are kept under `data/raw/<batch-date>/`. Both data directories are ignored by Git. Running the same batch date regenerates the same synthetic rows and replaces that date's local files; it does not append duplicate output.
 
