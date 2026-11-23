@@ -266,10 +266,15 @@ def reconcile_batch(raw_dir: Path, output_dir: Path, batch_date: date) -> dict[s
 
     matched_totals = Counter()
     unmatched_totals = Counter()
+    exception_reason_counts = Counter()
+    quarantine_reason_counts = {source: Counter() for source in CONTRACTS}
     for row in matched:
         matched_totals[row["currency"]] += row["payment_amount_minor"]
     for row in exceptions:
         unmatched_totals[row["payment_currency"]] += row["payment_amount_minor"]
+        exception_reason_counts.update(row["exception_reasons"].split(";"))
+    for row in quarantined:
+        quarantine_reason_counts[row["source"]].update(row["reason"].split(";"))
 
     output_dir.mkdir(parents=True, exist_ok=True)
     _write_csv(output_dir / "matched.csv", MATCHED_COLUMNS, matched)
@@ -284,6 +289,11 @@ def reconcile_batch(raw_dir: Path, output_dir: Path, batch_date: date) -> dict[s
         "matched_count": len(matched),
         "exception_count": len(exceptions),
         "quarantined_count": len(quarantined),
+        "exception_reason_counts": dict(sorted(exception_reason_counts.items())),
+        "quarantine_reason_counts": {
+            source: dict(sorted(counts.items()))
+            for source, counts in sorted(quarantine_reason_counts.items())
+        },
         "matched_amount_minor_by_currency": dict(sorted(matched_totals.items())),
         "unmatched_amount_minor_by_currency": dict(sorted(unmatched_totals.items())),
     }
