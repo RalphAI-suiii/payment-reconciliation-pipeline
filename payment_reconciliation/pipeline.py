@@ -51,11 +51,20 @@ MATCHED_COLUMNS = [
 ]
 EXCEPTION_COLUMNS = [
     "payment_id",
+    "exception_grain",
     "exception_reasons",
     "payment_amount_minor",
     "payment_currency",
     "ledger_entry_id",
     "settlement_id",
+    "source",
+    "source_record_id",
+    "source_row",
+    "source_currency",
+    "source_amount_minor",
+    "source_gross_minor",
+    "source_fee_minor",
+    "source_net_minor",
 ]
 QUARANTINE_COLUMNS = ["source", "source_row", "payment_id", "reason"]
 
@@ -195,7 +204,7 @@ def reconcile_batch(raw_dir: Path, output_dir: Path, batch_date: date) -> dict[s
     settlements = _index_by_payment_id(loaded["settlements"])
     payments = _index_by_payment_id(loaded["payments"])
     matched: list[dict[str, Any]] = []
-    exceptions: list[dict[str, Any]] = []
+    payment_exceptions: list[dict[str, Any]] = []
 
     for payment_id in sorted(payments):
         payment_rows = payments[payment_id]
@@ -235,9 +244,10 @@ def reconcile_batch(raw_dir: Path, output_dir: Path, batch_date: date) -> dict[s
         if reasons:
             ledger = ledger_rows[0] if len(ledger_rows) == 1 else {}
             settlement = settlement_rows[0] if len(settlement_rows) == 1 else {}
-            exceptions.append(
+            payment_exceptions.append(
                 {
                     "payment_id": payment_id,
+                    "exception_grain": "payment",
                     "exception_reasons": ";".join(reasons),
                     "payment_amount_minor": payment["amount_minor"],
                     "payment_currency": payment["currency"],
@@ -264,14 +274,40 @@ def reconcile_batch(raw_dir: Path, output_dir: Path, batch_date: date) -> dict[s
                 }
             )
 
+    orphan_exceptions: list[dict[str, Any]] = []
+    orphan_totals: dict[str, dict[str, Counter]] = {
+        "ledger": defaultdict(Counter),
+        "settlements": defaultdict(Counter),
+    }
+    for source, record_id_field in (("ledger", "ledger_entry_id"), ("settlements", "settlement_id")):
+        for row in loaded[source]:
+            if row["payment_id"] in payments:
+                continue
+            currency = row["currency"]
+            exception = {
+                "payment_id": row["payment_id"],
+                "exception_grain": "source_record",
+                "exception_reasons": "orphan_source_record",
+                "source": source,
+                "source_record_id": row[record_id_field],
+                "source_row": row["_source_row"],
+                "source_currency": currency,
+            }
+            for field in CONTRACTS[source]["integer_fields"]:
+                exception[f"source_{field}"] = row[field]
+                orphan_totals[source][currency][field] += row[field]
+            orphan_exceptions.append(exception)
+
+    exceptions = payment_exceptions + orphan_exceptions
     matched_totals = Counter()
     unmatched_totals = Counter()
     exception_reason_counts = Counter()
     quarantine_reason_counts = {source: Counter() for source in CONTRACTS}
     for row in matched:
         matched_totals[row["currency"]] += row["payment_amount_minor"]
-    for row in exceptions:
+    for row in payment_exceptions:
         unmatched_totals[row["payment_currency"]] += row["payment_amount_minor"]
+    for row in exceptions:
         exception_reason_counts.update(row["exception_reasons"].split(";"))
     for row in quarantined:
         quarantine_reason_counts[row["source"]].update(row["reason"].split(";"))
@@ -288,6 +324,9 @@ def reconcile_batch(raw_dir: Path, output_dir: Path, batch_date: date) -> dict[s
         "source_metrics": source_metrics,
         "matched_count": len(matched),
         "exception_count": len(exceptions),
+        "payment_exception_count": len(payment_exceptions),
+        "orphan_source_exception_count": len(orphan_exceptions),
+        "orphan_source_totals_by_source_and_currency": orphan_totals,
         "quarantined_count": len(quarantined),
         "exception_reason_counts": dict(sorted(exception_reason_counts.items())),
         "quarantine_reason_counts": {
