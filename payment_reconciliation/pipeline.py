@@ -114,7 +114,8 @@ def _normalize_and_validate(
         for column in date_fields:
             if row.get(column):
                 try:
-                    date.fromisoformat(row[column])
+                    if date.fromisoformat(row[column]).isoformat() != row[column]:
+                        raise ValueError
                 except ValueError:
                     reasons.append(f"invalid_{column}")
 
