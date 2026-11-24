@@ -55,7 +55,7 @@ Matching is deterministic. Missing, ambiguous, late-dated, and mismatched record
 | `ledger.csv` | One ledger entry | `ledger_entry_id`, `payment_id`, `posting_date`, `amount_minor`, `currency` |
 | `settlements.csv` | One settlement record | `settlement_id`, `payment_id`, `settlement_date`, `gross_minor`, `fee_minor`, `net_minor`, `currency` |
 
-`payment_id` is the shared matching key. Amounts are integer minor units; the generator uses USD and EUR, which both have two decimal places. Dates use ISO `YYYY-MM-DD` format. Extra named columns are ignored; missing required columns stop the batch.
+`payment_id` is the shared matching key. Amounts are integer minor units; the generator uses USD and EUR, which both have two decimal places. After whitespace is trimmed, source dates must be valid calendar dates in `YYYY-MM-DD` form. Other formats, including `YYYYMMDD` and ISO week dates, send the row to quarantine with `invalid_<field>`. Extra named columns are ignored; missing required columns stop the batch.
 
 An orphan is a validated, deduplicated ledger or settlement row whose `payment_id` is absent from the validated payments for that batch. Its source record ID comes from `ledger_entry_id` or `settlement_id`. The CSV row number identifies the input location retained after deduplication.
 
