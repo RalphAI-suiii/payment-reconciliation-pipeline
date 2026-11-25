@@ -75,6 +75,10 @@ def _read_rows(path: Path, required_columns: list[str]) -> list[tuple[int, dict[
     with path.open(newline="", encoding="utf-8") as stream:
         reader = csv.DictReader(stream)
         headers = reader.fieldnames or []
+        duplicates = sorted(name for name, count in Counter(headers).items() if count > 1)
+        if duplicates:
+            names = ", ".join(repr(name) for name in duplicates)
+            raise ValueError(f"{path.name} has duplicate column names: {names}")
         missing = sorted(set(required_columns) - set(headers))
         if missing:
             raise ValueError(f"{path.name} is missing required columns: {', '.join(missing)}")
