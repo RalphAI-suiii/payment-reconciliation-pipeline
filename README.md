@@ -17,7 +17,9 @@ flowchart TD
     D --> F
     E --> F
 
-    F --> G{"Headers and row values valid?"}
+    F --> V{"Required headers present and column names unique?"}
+    V -- "No" --> T["Fail batch before writing outputs"]
+    V -- "Yes" --> G{"Row values valid?"}
     G -- "Invalid row" --> Q["Quarantine row with reason"]
     G -- "Valid" --> H["Normalize fields and remove duplicate rows"]
     H --> I{"Accepted processor payment for this payment_id?"}
@@ -37,7 +39,7 @@ flowchart TD
 ## What the batch does
 
 1. Creates three repeatable CSV inputs for a batch date.
-2. Checks required headers and validates required values, dates, currencies, and integer amounts. A missing required header fails the batch; invalid individual rows are written to quarantine.
+2. Checks required headers and validates required values, dates, currencies, and integer amounts. Missing required headers or repeated column names stop the batch before it writes reconciliation outputs. Invalid individual rows go to quarantine.
 3. Trims whitespace, uppercases currency codes, and removes identical normalized rows within each source.
 4. Matches records by `payment_id` and checks payment and ledger amounts, currency agreement, settlement date, and `gross_minor - fee_minor = net_minor`.
 5. Flags each accepted ledger or settlement record whose `payment_id` has no accepted processor payment in the batch.
@@ -55,7 +57,7 @@ Matching is deterministic. Missing, ambiguous, late-dated, and mismatched record
 | `ledger.csv` | One ledger entry | `ledger_entry_id`, `payment_id`, `posting_date`, `amount_minor`, `currency` |
 | `settlements.csv` | One settlement record | `settlement_id`, `payment_id`, `settlement_date`, `gross_minor`, `fee_minor`, `net_minor`, `currency` |
 
-`payment_id` is the shared matching key. Amounts are integer minor units; the generator uses USD and EUR, which both have two decimal places. After whitespace is trimmed, source dates must be valid calendar dates in `YYYY-MM-DD` form. Other formats, including `YYYYMMDD` and ISO week dates, send the row to quarantine with `invalid_<field>`. Extra named columns are ignored; missing required columns stop the batch.
+`payment_id` is the shared matching key. Amounts are integer minor units; the generator uses USD and EUR, which both have two decimal places. After whitespace is trimmed, source dates must be valid calendar dates in `YYYY-MM-DD` form. Other formats, including `YYYYMMDD` and ISO week dates, send the row to quarantine with `invalid_<field>`. Column names must be unique, including any extra columns. Extra named columns are ignored during reconciliation.
 
 An orphan is a validated, deduplicated ledger or settlement row whose `payment_id` is absent from the validated payments for that batch. Its source record ID comes from `ledger_entry_id` or `settlement_id`. The CSV row number identifies the input location retained after deduplication.
 
