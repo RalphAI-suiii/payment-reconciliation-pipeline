@@ -82,7 +82,7 @@ def _read_rows(path: Path, required_columns: list[str]) -> list[tuple[int, dict[
         missing = sorted(set(required_columns) - set(headers))
         if missing:
             raise ValueError(f"{path.name} is missing required columns: {', '.join(missing)}")
-        return [(line_number, row) for line_number, row in enumerate(reader, start=2)]
+        return [(reader.line_num, row) for row in reader]
 
 
 def _normalize_and_validate(
