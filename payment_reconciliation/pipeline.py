@@ -88,7 +88,6 @@ def _read_rows(path: Path, required_columns: list[str]) -> list[tuple[int, dict[
             raise ValueError(f"{path.name} could not be parsed as CSV ({error})") from error
 
 
-
 def _normalize_and_validate(
     source: str,
     rows: list[tuple[int, dict[str, Any]]],
